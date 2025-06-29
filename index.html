@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flashcard App</title>
+    <!-- 
+    USAGE INSTRUCTIONS:
+    
+    1. IN CLAUDE.AI (Recommended): 
+       - No setup needed! Just use the app as-is.
+       - The app uses Claude's built-in API automatically.
+    
+    2. STANDALONE USAGE (Outside Claude.ai):
+       - Get an API key from https://console.anthropic.com/
+       - Replace 'your-api-key-here' in the JavaScript with your actual API key
+       - Note: You'll need to handle CORS if running locally
+    -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .app-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #6A9BCC;
+        }
+
+        .create-mode {
+            width: 100%;
+            max-width: 32rem;
+            padding: 2rem;
+        }
+
+        .main-title {
+            color: white;
+            font-size: 2.5rem;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .tab-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .tab-wrapper {
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.125rem;
+            border-radius: 9999px;
+            display: inline-flex;
+        }
+
+        .tab-button {
+            padding: 0.5rem 1.5rem;
+            border-radius: 9999px;
+            font-weight: 500;
+            transition: all 0.3s;
+            font-size: 1rem;
+            border: none;
+            cursor: pointer;
+            background: none;
+        }
+
+        .tab-button.active {
+            background-color: white;
+            color: #374151;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab-button.inactive {
+            color: white;
+        }
+
+        .tab-button.inactive:hover {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .input-container {
+            background-color: white;
+            border-radius: 1.5rem;
+            padding: 2rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .topic-input {
+            width: 100%;
+            height: 13rem;
+            color: #111827;
+            font-size: 1.125rem;
+            line-height: 1.6;
+            resize: none;
+            border: none;
+            outline: none;
+            font-family: inherit;
+        }
+
+        .topic-input::placeholder {
+            color: #9CA3AF;
+        }
+
+        .generate-button {
+            width: 100%;
+            margin-top: 2rem;
+            padding: 1rem;
+            background-color: #111827;
+            color: white;
+            font-weight: 500;
+            border-radius: 9999px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            font-size: 1.125rem;
+        }
+
+        .generate-button:hover {
+            background-color: #1F2937;
+        }
+
+        .loading-container {
+            text-align: center;
+        }
+
+        .loading-title {
+            color: white;
+            font-size: 2.5rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+        }
+
+        .loading-subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 2rem;
+        }
+
+        .spinner {
+            width: 3rem;
+            height: 3rem;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .study-container {
+            width: 100%;
+            max-width: 48rem;
+            padding: 2rem;
+        }
+
+        .card-container {
+            position: relative;
+            perspective: 1000px;
+        }
+
+        .card {
+            position: relative;
+            width: 100%;
+            height: 24rem;
+            transition: all 0.7s;
+            transform-style: preserve-3d;
+            cursor: pointer;
+        }
+
+        .card.flipped {
+            transform: rotateX(180deg);
+        }
+
+        .card.animating {
+            transform: scale(0.95);
+            opacity: 0;
+        }
+
+        .card-side {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+
+        .card-front {
+            /* Front side styles */
+        }
+
+        .card-back {
+            transform: rotateX(180deg);
+        }
+
+        .card-front-content {
+            text-align: center;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card-front-text {
+            font-size: 2.5rem;
+            font-weight: 500;
+            color: #1F2937;
+        }
+
+        .card-hint {
+            color: #6B7280;
+            margin-top: auto;
+        }
+
+        .card-back-content {
+            text-align: center;
+        }
+
+        .card-back-text {
+            font-size: 1.25rem;
+            color: #374151;
+            line-height: 1.625;
+        }
+
+        .navigation {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+
+        .nav-button {
+            padding: 0.75rem;
+            border-radius: 50%;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-button.enabled {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .nav-button.enabled:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .nav-button.disabled {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.5);
+            cursor: not-allowed;
+        }
+
+        .card-counter {
+            margin: 0 1.5rem;
+            color: white;
+            font-size: 1.125rem;
+            font-weight: 500;
+        }
+
+        .new-cards-link {
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        .new-cards-button {
+            color: rgba(255, 255, 255, 0.7);
+            background: none;
+            border: none;
+            cursor: pointer;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+            font-size: inherit;
+            font-family: inherit;
+        }
+
+        .new-cards-button:hover {
+            color: white;
+        }
+
+        .chevron-icon {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Create Mode -->
+        <div id="createMode" class="create-mode">
+            <h1 class="main-title">Create flashcards</h1>
+            
+            <div class="tab-container">
+                <div class="tab-wrapper">
+                    <button id="pasteTab" class="tab-button active" onclick="setActiveTab('paste')">
+                        Paste text
+                    </button>
+                    <button id="describeTab" class="tab-button inactive" onclick="setActiveTab('describe')">
+                        Describe topic
+                    </button>
+                </div>
+            </div>
+            
+            <div class="input-container">
+                <textarea
+                    id="topicInput"
+                    class="topic-input"
+                    placeholder="Paste your text here..."
+                ></textarea>
+            </div>
+            
+            <button class="generate-button" onclick="generateFlashcards()">
+                Generate flashcards
+            </button>
+        </div>
+
+        <!-- Loading Mode -->
+        <div id="loadingMode" class="loading-container hidden">
+            <h1 class="loading-title">Generating your flashcard set...</h1>
+            <p class="loading-subtitle">This may take a while depending on the upload...</p>
+            <div class="spinner"></div>
+        </div>
+
+        <!-- Study Mode -->
+        <div id="studyMode" class="study-container hidden">
+            <div class="card-container">
+                <div id="flashcard" class="card" onclick="handleFlip()">
+                    <div class="card-side card-front">
+                        <div class="card-front-content">
+                            <h2 id="cardFront" class="card-front-text"></h2>
+                        </div>
+                        <p class="card-hint">Use ↑↓ arrows or click to flip</p>
+                    </div>
+                    
+                    <div class="card-side card-back">
+                        <div class="card-back-content">
+                            <p id="cardBack" class="card-back-text"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="navigation">
+                <button id="prevButton" class="nav-button disabled" onclick="handlePrevious()">
+                    <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15,18 9,12 15,6"></polyline>
+                    </svg>
+                </button>
+                
+                <span id="cardCounter" class="card-counter">1 / 1</span>
+                
+                <button id="nextButton" class="nav-button disabled" onclick="handleNext()">
+                    <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9,18 15,12 9,6"></polyline>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="new-cards-link">
+                <button class="new-cards-button" onclick="createNewFlashcards()">
+                    Create new flashcards
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Application state
+        let mode = 'create'; // 'create', 'loading', 'study'
+        let topic = '';
+        let flashcards = [];
+        let currentIndex = 0;
+        let flipped = false;
+        let activeTab = 'paste';
+        let animating = false;
+
+        // DOM elements
+        const createMode = document.getElementById('createMode');
+        const loadingMode = document.getElementById('loadingMode');
+        const studyMode = document.getElementById('studyMode');
+        const topicInput = document.getElementById('topicInput');
+        const pasteTab = document.getElementById('pasteTab');
+        const describeTab = document.getElementById('describeTab');
+        const flashcard = document.getElementById('flashcard');
+        const cardFront = document.getElementById('cardFront');
+        const cardBack = document.getElementById('cardBack');
+        const cardCounter = document.getElementById('cardCounter');
+        const prevButton = document.getElementById('prevButton');
+        const nextButton = document.getElementById('nextButton');
+
+        // Set active tab
+        function setActiveTab(tab) {
+            activeTab = tab;
+            
+            if (tab === 'paste') {
+                pasteTab.className = 'tab-button active';
+                describeTab.className = 'tab-button inactive';
+                topicInput.placeholder = 'Paste your text here...';
+            } else {
+                pasteTab.className = 'tab-button inactive';
+                describeTab.className = 'tab-button active';
+                topicInput.placeholder = 'Describe a topic Claude will generate the details...\n\ne.g. capitals of the world\ne.g. fun facts about San Diego';
+            }
+        }
+
+        // Set mode and update UI
+        function setMode(newMode) {
+            mode = newMode;
+            
+            createMode.className = mode === 'create' ? 'create-mode' : 'create-mode hidden';
+            loadingMode.className = mode === 'loading' ? 'loading-container' : 'loading-container hidden';
+            studyMode.className = mode === 'study' ? 'study-container' : 'study-container hidden';
+        }
+
+        // API Configuration (only needed if running outside Claude.ai)
+        const API_KEY = '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'; // Replace with your Anthropic API key
+        const API_URL = 'https://api.anthropic.com/v1/messages';
+
+        // Generate flashcards
+        async function generateFlashcards() {
+            topic = topicInput.value;
+            if (!topic.trim()) return;
+            
+            setMode('loading');
+            
+            let prompt;
+            
+            if (activeTab === 'paste') {
+                prompt = `You are tasked with extracting flashcard content from a given text chunk. Your goal is to identify key terms and their corresponding definitions or explanations that would be suitable for creating flashcards.
+
+Here's the text chunk you need to analyze:
+<text_chunk>
+${topic}
+</text_chunk>
+
+Guidelines for extracting flashcard content:
+1. Identify important terms, concepts, or phrases that are central to the text's topic.
+2. For each term, find a corresponding definition, explanation, or key information from the text.
+3. Ensure that the term and definition pairs are concise and clear.
+4. Extract only the most relevant and significant information.
+5. Aim for a balance between comprehensiveness and brevity.
+
+Create between 3-10 flashcards based on the content available.
+
+Respond ONLY with a valid JSON array in this exact format:
+[
+  {
+    "front": "Term or concept (keep concise, 1-5 words ideal)",
+    "back": "Definition or explanation from the text (clear and educational, under 50 words)"
+  }
+]
+
+DO NOT include any text outside the JSON array.`;
+            } else {
+                prompt = `You are tasked with creating educational flashcards about "${topic}". Your goal is to create concise, clear, and accurate flashcard pairs that would help someone learn this topic.
+
+Guidelines for creating effective flashcards:
+1. Each flashcard should have a clear term/concept on one side and a concise definition/explanation on the other
+2. Terms should be specific and focused (ideally 1-5 words)
+3. Definitions should be clear and brief (ideally under 50 words)
+4. Focus on the most important concepts related to the topic
+5. Make the content educational, accurate, and helpful for learning
+
+Based on the topic, adapt your approach:
+* For locations (countries, cities): Use the location as the term and key facts as the definition
+* For historical subjects: Use events/people as terms and dates/significance as definitions
+* For scientific topics: Use concepts/terms as the front and explanations as the back
+* For language learning: Use words in one language as terms and translations as definitions
+
+Please provide exactly 10 flashcards in this JSON format - don't include any text outside the JSON:
+[
+  {
+    "front": "Term or concept",
+    "back": "Definition or explanation"
+  }
+]`;
+            }
+            
+            try {
+                let response;
+                
+                // Use Claude.ai built-in API (works in artifacts)
+                if (typeof window.claude !== 'undefined') {
+                    response = await window.claude.complete(prompt);
+                } else {
+                    // Use Anthropic API (for standalone usage)
+                    const apiResponse = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': API_KEY,
+                            'anthropic-version': '2023-06-01'
+                        },
+                        body: JSON.stringify({
+                            model: 'claude-3-sonnet-20240229',
+                            max_tokens: 2000,
+                            messages: [{
+                                role: 'user',
+                                content: prompt
+                            }]
+                        })
+                    });
+                    
+                    const data = await apiResponse.json();
+                    response = data.content[0].text;
+                }
+                
+                const cards = JSON.parse(response);
+                flashcards = cards;
+                currentIndex = 0;
+                flipped = false;
+                setMode('study');
+                updateCard();
+                updateNavigation();
+            } catch (error) {
+                console.error('Error generating flashcards:', error);
+                alert('Failed to generate flashcards. Please try again.');
+                setMode('create');
+            }
+        }
+
+        // Update current card display
+        function updateCard() {
+            if (flashcards.length > 0) {
+                const currentCard = flashcards[currentIndex];
+                cardFront.textContent = currentCard.front;
+                cardBack.textContent = currentCard.back;
+                cardCounter.textContent = `${currentIndex + 1} / ${flashcards.length}`;
+            }
+        }
+
+        // Update navigation buttons
+        function updateNavigation() {
+            if (currentIndex === 0) {
+                prevButton.className = 'nav-button disabled';
+            } else {
+                prevButton.className = 'nav-button enabled';
+            }
+            
+            if (currentIndex === flashcards.length - 1) {
+                nextButton.className = 'nav-button disabled';
+            } else {
+                nextButton.className = 'nav-button enabled';
+            }
+        }
+
+        // Handle card flip
+        function handleFlip() {
+            flipped = !flipped;
+            flashcard.className = flipped ? 'card flipped' : 'card';
+        }
+
+        // Handle next card
+        function handleNext() {
+            if (currentIndex < flashcards.length - 1 && !animating) {
+                animating = true;
+                flashcard.className = 'card animating';
+                
+                setTimeout(() => {
+                    flipped = false;
+                    flashcard.className = 'card';
+                    currentIndex++;
+                    updateCard();
+                    updateNavigation();
+                    
+                    setTimeout(() => {
+                        animating = false;
+                    }, 50);
+                }, 150);
+            }
+        }
+
+        // Handle previous card
+        function handlePrevious() {
+            if (currentIndex > 0 && !animating) {
+                animating = true;
+                flashcard.className = 'card animating';
+                
+                setTimeout(() => {
+                    flipped = false;
+                    flashcard.className = 'card';
+                    currentIndex--;
+                    updateCard();
+                    updateNavigation();
+                    
+                    setTimeout(() => {
+                        animating = false;
+                    }, 50);
+                }, 150);
+            }
+        }
+
+        // Create new flashcards
+        function createNewFlashcards() {
+            setMode('create');
+            topicInput.value = '';
+            flashcards = [];
+            currentIndex = 0;
+            flipped = false;
+        }
+
+        // Keyboard event handler
+        function handleKeyPress(e) {
+            if (mode === 'study') {
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    handlePrevious();
+                }
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    handleNext();
+                }
+                if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    handleFlip();
+                }
+            }
+        }
+
+        // Initialize app
+        function init() {
+            setActiveTab('paste');
+            setMode('create');
+            
+            // Add keyboard event listener
+            document.addEventListener('keydown', handleKeyPress);
+        }
+
+        // Start the app
+        init();
+    </script>
+</body>
+</html>
